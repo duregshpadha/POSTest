@@ -1,0 +1,166 @@
+﻿@model MasterItemViewModel
+@{
+    ViewData["Title"] = "Stock";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1 class="text-center">Stock</h1>
+
+
+<div class="row">
+    <div class="col-sm-12">
+        <form id="addStockForm" class="border p-4" method="post">
+            <input type="hidden" id="hdnItems" />
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="nameameInput" class="small mb-1" asp-for="Name"></label>
+                    <input type="text" class="form-control" id="nameameInput" asp-for="Name" placeholder="Enter Customer Name">
+                    <span asp-validation-for="Name" class="text-danger"></span>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="rateInput" class="small mb-1">Rate</label>
+                    <input type="number" class="form-control" id="rateInput" asp-for="Rate">
+                    <span asp-validation-for="Rate" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="totalQuantityInput" class="small mb-1" asp-for="Stock">Quantity</label>
+                    <input type="number" class="form-control" id="totalQuantityInput" asp-for="Stock" placeholder="Total Quantity">
+                    <span asp-validation-for="Stock" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="text-center">
+                <button type="submit" id="btnSubmit" class="btn btn-primary">Submit</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Update Stock</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input id="txtStock" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" id="btnAddStock" class="btn btn-primary">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<br />
+<br />
+<div class="col-sm-12 text-center">
+    <div class="text-danger">
+        <span id="errorMessage"></span>
+    </div>
+    <div class="text-success">
+        <span id="successMessage"></span>
+    </div>
+</div>
+<table id="stockTable" class="table table-striped table-bordered"></table>
+
+@section Scripts{
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(function () {
+            let stockTable = {
+                dt: null,
+
+                init: function () {
+                    this.dt = $('#stockTable').DataTable({
+                        serverSide: true,
+                        processing: true,
+                        responsive: true,
+                        select: false,
+                        colReorder: true,
+                        iDisplayLength: 10,
+                        dom: "<'row p-0'<'col-sm-4'B><'col-sm-4'l><'col-sm-4'f>>rtip",
+                        buttons: [
+                            'copyHtml5',
+                            'excelHtml5',
+                            'csvHtml5',
+                            {
+                                extend: 'pdfHtml5',
+                                orientation: 'landscape',
+                                pageSize: 'LEGAL'
+                            },
+                            'print'
+                        ],
+                        ajax: {
+                            url: "/Home/StockDataTable",
+                            dataType: "json",
+                            type: "POST",
+                            async: true,
+                            global: false
+                        },
+                        language: {
+                            searchPlaceHolder: "Name"
+                        },
+                        columns: [
+                            { title: "Id", data: "id", searchable: false, sortable: false, className: "d-none" },
+                            { title: "Name", data: "name", searchable: true },
+                            { title: "Rate", data: "rate", searchable: false },
+                            { title: "Quantity", data: "stock", searchable: false, className: "tdQuantity" },
+                            {
+                                title: "Action",
+                                data: null,
+                                render: function (data, type, row) {
+                                    let button = '';
+                                    button += '<button class="btn btn-primary btnAddStock" data-id="' + data['id'] + '">Update Stock</button>';
+                                    return button;
+                                }
+                            }
+                        ]
+                    });
+                }
+            }
+
+            stockTable.init();
+
+            let id = '';
+            let quantity = 0;
+            $(document).on('click', '.btnAddStock', function () {
+                id = $(this).data('id');
+                quantity = $(this).parent().siblings('.tdQuantity').text();
+                $('#exampleModal').modal('show');
+                $('#txtStock').val(quantity);
+            });
+
+            $('#exampleModal').on('hiden.bs.modal', function () {
+                $('#txtStock').val('');
+                id = '';
+                quantity = '';
+            });
+
+            $('#btnAddStock').on('click', function () {
+                quantity = $('#txtStock').val();
+                $.post('/Home/AddStock', { id: id, stock: quantity }, function (res) {
+                    if (!res) {
+                        $('#errorMessage').text("Technical error! Please try again after some time.");
+                        return false;
+                    }
+                    if (res.success === "fail") {
+                        $('#errorMessage').text(res.message);
+                    }
+                    if (res.success === "success") {
+                        $('#successMessage').text(res.message);
+                    }
+                    $('#exampleModal').modal('hide');
+                    stockTable.dt.ajax.reload(null);
+
+                });
+            });
+        });
+    </script>
+}

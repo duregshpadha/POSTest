@@ -1,0 +1,262 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+<div class="text-center">
+    <h1 class="display-4">Welcome To POS</h1>
+</div>
+<hr />
+<br />
+<div class="row justify-content-center">
+    <div class="col-sm-12">
+        <div class="col-sm-12 text-center">
+            <div class="text-danger">
+                <span id="errorMessage"></span>
+            </div>
+            <div class="text-success">
+                <span id="successMessage"></span>
+            </div>
+        </div>
+        <form id="perchaseForm" class="border p-4">
+            <input type="hidden" id="hdnItems" />
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="customerNameInput" class="small mb-1">Cutomer Name</label>
+                    <input type="text" class="form-control" id="customerNameInput" placeholder="Enter Customer Name" maxlength="50" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="phoneInput" class="small mb-1">Mobile Number</label>
+                    <input type="tel" class="form-control" id="phoneInput" placeholder="Mobile number" maxlength="10" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="totalQuantityInput" class="small mb-1">Total Quantity</label>
+                    <input type="number" class="form-control" id="totalQuantityInput" placeholder="Total Quantity" readonly>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="totalAmountInput" class="small mb-1">Total Amount</label>
+                    <input type="number" class="form-control" id="totalAmountInput" placeholder="Total Amount" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="saleOrReturnInput" class="small mb-1">Sale or Return</label>
+                    <select class="form-control" id="saleOrReturnInput">
+                        <option value="S">S</option>
+                        <option value="R">R</option>
+                    </select>
+                </div>
+
+            </div>
+            <div class="text-center">
+                <button type="submit" id="btnSubmit" class="btn btn-primary">Submit</button>
+            </div>
+
+        </form>
+    </div>
+</div>
+<br />
+<br />
+<div class="row">
+    <div class="col-sm-12">
+        <table class="table table-bordered table-striped w-100">
+            <thead class="bg-secondary text-center">
+                <tr>
+                    <td colspan="4">
+                        Purchase Items
+                    </td>
+                </tr>
+                <tr>
+                    <td class="w-50">Name</td>
+                    <td>Quantity</td>
+                    <td>Price</td>
+                    <td>Remove</td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="tdItemDDL"><select id="itemDropdown" class="itemDropdown w-100" /></td>
+                    <td class="tdItemQuantity"><input type="number" class="txtItemQuantity" value="0" /></td>
+                    <td class="tdItemPrice"><input type="number" class="txtItemPrice" value="0" readonly /></td>
+                    <td><button id="btnRemoveItem" class="btn btn-secondary">-</button></td>
+                </tr>
+                <tr id="lastTr">
+                    <td colspan="4" class="text-center">
+                        <button id="btnAddMoreItem" class="btn btn-primary">+</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts{
+    <script>
+        $(function () {
+            select2Items('#itemDropdown');
+
+            let itemCount = 0;
+
+            $('#btnAddMoreItem').on('click', function () {
+                itemCount++;
+                let html = '<tr>';
+                html += '<td class="tdItemDDL"><select id="itemDropdown' + itemCount + '" class="itemDropdown w-100" /></td>';
+                html += '<td class="tdItemQuantity"><input type="number" class="txtItemQuantity" value="0" /></td>';
+                html += '<td class="tdItemPrice"><input type="number" class="txtItemPrice" value="0" readonly /></td>';
+                html += '<td><button id="btnRemoveItem' + itemCount + '" class="btn btn-secondary">-</button></td>';
+                html += '</tr>';
+                $(html).insertBefore('#lastTr');
+                select2Items('#itemDropdown' + itemCount);
+            });
+
+            $(document).on('click', '[id^="btnRemoveItem"]', function () {
+                $(this).parents('tr').remove();
+                changeTotalQuantity();
+            });
+
+            $(document).on('keyup', '.txtItemQuantity', function () {
+                let quantityTextBox = $(this);
+                let quantity = quantityTextBox.val();
+                let itemId = quantityTextBox.parent().siblings('.tdItemDDL').children('select').first().find('option:selected').val();
+                if (!itemId) {
+                    return false;
+                }
+                if (!quantity) {
+                    quantity = 0;
+                }
+
+                $.post('/Home/GetItem', { id: itemId }, function (res) {
+                    let itemQuantity = res.stock;
+                    if (Number(itemQuantity) < Number(quantity)) {
+                        quantityTextBox.val(itemQuantity);
+                        quantity = itemQuantity;
+                    }
+                    let price = Number(res.rate);
+                    let newPrice = price * quantity;
+                    quantityTextBox.parent().siblings('.tdItemPrice').children('input').first().prop('readonly', false);
+                    quantityTextBox.parent().siblings('.tdItemPrice').children('input').first().val(newPrice);
+                    quantityTextBox.parent().siblings('.tdItemPrice').children('input').first().prop('readonly', true);
+                    changeTotalQuantity();
+                });
+
+            });
+
+            $(document).on('change', '[id^="itemDropdown"]', function () {
+                let dropDown = $(this);
+                let itemId = $(this).find('option:selected').val();
+                $.post('/Home/GetItem', { id: itemId }, function (res) {
+                    let price = Number(res.rate);
+                    dropDown.parent().siblings('.tdItemPrice').children('input').first().prop('readonly', false);
+                    dropDown.parent().siblings('.tdItemPrice').children('input').first().val(price);
+                    dropDown.parent().siblings('.tdItemPrice').children('input').first().prop('readonly', true);
+                    dropDown.parent().siblings('.tdItemQuantity').children('input').first().val(1);
+                    changeTotalQuantity();
+                });
+            });
+
+            $('#perchaseForm').on('submit', function (e) {
+                e.preventDefault();
+                debugger;
+                let selectedItems = getSelectedItemsIdArray();
+                console.log(selectedItems);
+                if (selectedItems.length < 1) {
+                    $('#errorMessage').text('There is no item selected from item list');
+                    return false;
+                }
+                let customerName = $('#customerNameInput').val();
+                let phone = $('#phoneInput').val();
+                let saleOrReturn = $('#saleOrReturnInput').find('option:selected').val();
+                let req = {
+                    items: selectedItems,
+                    customerName: customerName,
+                    mobileNumber: phone,
+                    saleOrReturn: saleOrReturn
+                };
+                $.post('/Home/PurchaseItem', req, function (res) {
+                    if (!res) {
+                        $('#errorMessage').text("Technical error! Please try again after some time.");
+                        return false;
+                    }
+                    if (res.success === "fail") {
+                        $('#errorMessage').text(res.message);
+                    }
+                    if (res.success === "success") {
+                        $('#successMessage').text(res.message);
+                        $('.tdItemDDL').each(function () {
+                            $(this).parent('tr').remove();
+                        });
+                    }
+                });
+
+            });
+
+            function changeTotalQuantity() {
+                let totalQuantity = 0;
+                $('.txtItemQuantity').each(function (elem, i) {
+                    let quantity = 0;
+                    if ($(this).val() && Number($(this).val()) > 0) {
+                        quantity = Number($(this).val())
+                    }
+                    totalQuantity = totalQuantity + quantity;
+                });
+                $('#totalQuantityInput').prop('readonly', false);
+                $('#totalQuantityInput').val(totalQuantity);
+                $('#totalQuantityInput').prop('readonly', true);
+                changeTotalAmount();
+            }
+
+            function changeTotalAmount() {
+                let totalAmount = 0;
+                $('.txtItemPrice').each(function (elem, i) {
+                    let price = 0;
+                    if ($(this).val() && Number($(this).val()) > 0) {
+                        price = Number($(this).val())
+                    }
+                    totalAmount = totalAmount + price;
+                });
+                $('#totalAmountInput').prop('readonly', false);
+                $('#totalAmountInput').val(totalAmount);
+                $('#totalAmountInput').prop('readonly', true);
+            }
+
+            function getSelectedItemsIdArray() {
+                let items = [];
+                $('.itemDropdown').each(function (elem, i) {
+                    let itemId = $(this).find('option:selected').val();
+                    if (itemId) {
+                        let item = {
+                            id: itemId,
+                            quantity: $(this).parent().siblings('.tdItemQuantity').children('input').first().val()
+                        }
+                        items.push(item)
+                    }
+                });
+                return items;
+            }
+
+            function select2Items(selector) {
+                $(selector).select2({
+                    placeholder: "Search for ...",
+                    ajax: {
+                        url: "/Home/MasterItemsSelect2",
+                        type: "Post",
+                        global: false,
+                        data: function (params) {
+                            var query = {
+                                term: params.term,
+                                pageNumber: params.page || 1,
+                                pageSize: 10
+                            };
+                            return query;
+                        },
+                        processResults: function (data, params) {
+                            return data;
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}
